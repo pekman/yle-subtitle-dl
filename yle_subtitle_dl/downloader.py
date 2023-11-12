@@ -220,6 +220,13 @@ async def download_subtitles(
                                 start_time,
                                 vtt_log_label)
 
+                            if (end_time is not None and
+                                    vttfile_end_time >= end_time):
+                                logger.debug("End time reached for "
+                                             f"{subinfo['name']!r}. "
+                                             "Stopping.")
+                                return
+
                     elif vttfile_end_time > start_time:
                         logger.debug("Skipping already downloaded "
                                      f"subtitle segment {vtt_log_label}")
