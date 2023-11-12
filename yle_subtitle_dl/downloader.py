@@ -1,4 +1,3 @@
-import aiohttp
 import asyncio
 from datetime import datetime, timedelta
 import ipaddress
@@ -7,6 +6,9 @@ import random
 import re
 from urllib.parse import urljoin
 from typing import Optional
+
+import aiohttp
+import aiohttp_retry
 
 from .vttmerge import WebVTTMerge
 
@@ -68,12 +70,15 @@ async def download_all_subtitles(
         start_time: datetime,
         end_time: Optional[datetime],
 ) -> None:
-    async with aiohttp.ClientSession(
+    async with aiohttp_retry.RetryClient(
             raise_for_status=True,
             headers={
                 "User-Agent": "yle-subtitle-dl",
                 "X-Forwarded-For": random_elisa_ipv4(),
             },
+            retry_options=aiohttp_retry.JitterRetry(
+                attempts=5,
+            ),
     ) as session:
         logger.debug(f"Loading master manifest from {hls_master_playlist_url}")
         async with session.get(hls_master_playlist_url) as resp:
@@ -123,7 +128,7 @@ _media_playlist_re = re.compile(r"""
 
 
 async def download_subtitles(
-        session: aiohttp.ClientSession,
+        session: aiohttp_retry.RetryClient,
         subinfo: dict[str, str],
         output_filename_base: str,
         start_time: datetime,
