@@ -1,5 +1,5 @@
 import asyncio
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 import ipaddress
 import logging
 import random
@@ -27,6 +27,10 @@ SUBINFO_TO_SUFFIX = {
     ("eng", ""): "en",
     ("eng", "public.accessibility.transcribes-spoken-dialog"): "enh",
 }
+
+# start download this much earlier, just in case the local clock is
+# running slow or Yle happens to put subtitles online a bit in advance
+START_IN_ADVANCE = timedelta(minutes=1)
 
 
 _m3u8_attr_uri_re = re.compile(r"""
@@ -64,12 +68,23 @@ def random_ip(ip_network):
 # }
 
 
+async def wait_for_start_time(start_time: datetime) -> None:
+    sleep_until = start_time - START_IN_ADVANCE
+    time_until_start = sleep_until - datetime.now(timezone.utc)
+    if time_until_start > timedelta():
+        logger.info("Waiting for start time")
+        logger.debug(f"(Start at {sleep_until})")
+        await asyncio.sleep(time_until_start.total_seconds())
+
+
 async def download_all_subtitles(
         hls_master_playlist_url: str,
         output_filename_base: str,
         start_time: datetime,
         end_time: Optional[datetime],
 ) -> None:
+    await wait_for_start_time(start_time)
+
     async with aiohttp_retry.RetryClient(
             raise_for_status=True,
             headers={
