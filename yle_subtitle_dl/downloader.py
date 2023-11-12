@@ -217,13 +217,20 @@ async def download_subtitles(
                                         f"{vtt_log_label}")
                             logger.debug(val)
                             abs_vtt_url = urljoin(subinfo["url"], val)
-                            async with session.get(abs_vtt_url) as resp:
-                                vttdata = await resp.text(encoding="utf-8-sig")
-
-                            vttwriter.convert_and_write(
-                                vttdata,
-                                start_time,
-                                vtt_log_label)
+                            try:
+                                async with session.get(abs_vtt_url) as resp:
+                                    vttdata = await resp.text(
+                                        encoding="utf-8-sig")
+                            except aiohttp.ClientError:
+                                logger.exception(
+                                    "Error loading subtitle segment "
+                                    f"{vtt_log_label}. Some subtitles "
+                                    "may be missing.")
+                            else:
+                                vttwriter.convert_and_write(
+                                    vttdata,
+                                    start_time,
+                                    vtt_log_label)
 
                             if (end_time is not None and
                                     vttfile_end_time >= end_time):
