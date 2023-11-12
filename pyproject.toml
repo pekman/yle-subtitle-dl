@@ -1,0 +1,18 @@
+[project]
+name = "yle-subtitle-dl"
+dependencies = [
+    "aiohttp",
+    "dateparser",
+]
+requires-python = ">=3.10"
+version = "0.dev20231112"
+
+[project.optional-dependencies]
+dev = [
+    "flake8",
+    "mypy",
+    "types-dateparser",
+]
+
+[project.scripts]
+yle-subtitle-dl = "yle_subtitle_dl.__main__:main"
