@@ -128,9 +128,14 @@ async def download_all_subtitles(
 _media_playlist_re = re.compile(r"""
     (?: \#EXT  # tag
         (?: -X-TARGETDURATION: [ \t]* (?P<targetduration> \d+ )
+        |   -X-VERSION: [ \t]* (?P<version> \d+ )
         |   -X-MEDIA-SEQUENCE: [ \t]* (?P<media_sequence> \d+ )
         |   -X-PROGRAM-DATE-TIME: [ \t]* (?P<program_date_time> \S+ )
         |   INF: [ \t]* (?P<extinf> [\d\.]+ )
+        |   -X-BYTERANGE: (?P<byterange>)
+        |   -X-DISCONTINUITY \b (?P<discontinuity>)
+        |   -X-KEY: (?P<key> [^\r\n]* )
+        |   -X-MAP: (?P<map>)
         |   -X-ENDLIST \b (?P<endlist>)
         |   (?P<unknown_tag>)
         )
@@ -138,7 +143,9 @@ _media_playlist_re = re.compile(r"""
     |   [ \t]* (?= \r\n | \r | \n | \Z ) (?P<empty_line>)
     |   (?P<url> \S+ )
     |   (?P<error> [^\r\n]* )
-    ) [^\r\n]*? (?: \r\n | \r | \n | \Z )
+    )
+    [^\r\n]*?  # ignore anything extra after what matched above
+    (?: \r\n | \r | \n | \Z )
 """, re.VERBOSE | re.ASCII)
 
 
@@ -264,6 +271,25 @@ async def download_subtitles(
                     logger.debug("End marker in media manifest of "
                                  f"{subinfo['name']!r}. Stopping.")
                     return
+
+                elif kind == "version":
+                    if int(val) > 7:
+                        logger.warning(
+                            f"Media manifest of {subinfo['name']!r} "
+                            f"has unsupported version ({val})")
+
+                elif kind in ("byterange", "discontinuity", "map") or (
+                        kind == "key" and "METHOD=NONE" not in val
+                ):
+                    # These tags are not implemented and change
+                    # subtitle segment processing enough to probably
+                    # break things. Print warning if Yle some day
+                    # changes their stream to include these tags.
+                    logger.warning(
+                        f"Media manifest of {subinfo['name']!r} "
+                        f"contains #EXT-X-{kind.upper()} tag, which "
+                        "is not supported. Errors may occur.")
+                    logger.debug(f"manifest line: {m[0]!r}")
 
                 elif kind == "error":
                     logger.warning("error parsing subtitle manifest "
