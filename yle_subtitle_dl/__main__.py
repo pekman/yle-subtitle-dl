@@ -95,9 +95,9 @@ def main():
             Time values can be given in human-readable form.
             For start and end time, see
             <https://dateparser.readthedocs.io/>.
-            Durations can either be of the form "[hh:]mm:ss" or
+            Duration can be either of the form "[[hh:]mm:]ss" or
             something like "1h 2m 3s" or "1 hour 2 minutes 3 seconds".
-            This works in Finnish, Eglish, and Swedish.
+            This works in Finnish, English, and Swedish.
         """)
 
     time_group.add_argument(
