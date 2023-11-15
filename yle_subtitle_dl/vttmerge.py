@@ -175,7 +175,14 @@ class WebVTTMerge:
             self._writeln("")
 
         # non-header lines
+        skip_until_nonempty = False
         for line in line_iter:
+            if skip_until_nonempty:
+                if line == "":
+                    continue
+                else:
+                    skip_until_nonempty = False
+
             m = self.cue_timings_re.match(line)
             if m:
                 try:
@@ -192,6 +199,10 @@ class WebVTTMerge:
                 else:
                     if cue_end < 0:
                         # skip subtitles before self.start_datetime
+                        for cue_line in line_iter:
+                            if cue_line == "":
+                                break
+                        skip_until_nonempty = True
                         continue
                     if cue_start < 0:
                         # Subtitle is being displayed at
