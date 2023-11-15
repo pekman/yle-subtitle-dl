@@ -133,7 +133,6 @@ _media_playlist_re = re.compile(r"""
         |   -X-PROGRAM-DATE-TIME: [ \t]* (?P<program_date_time> \S+ )
         |   INF: [ \t]* (?P<extinf> [\d\.]+ )
         |   -X-BYTERANGE: (?P<byterange>)
-        |   -X-DISCONTINUITY \b (?P<discontinuity>)
         |   -X-KEY: (?P<key> [^\r\n]* )
         |   -X-MAP: (?P<map>)
         |   -X-ENDLIST \b (?P<endlist>)
@@ -166,6 +165,7 @@ async def download_subtitles(
         ".vtt")
 
     targetduration = 0.0
+    # if no times in playlist, act as if it starts at start_time
     vttfile_start_time = start_time
     vttfile_duration = 0.0
     next_media_sequence_to_dl = 0
@@ -251,7 +251,7 @@ async def download_subtitles(
                             else:
                                 vttwriter.convert_and_write(
                                     vttdata,
-                                    start_time,
+                                    vttfile_start_time,
                                     vtt_log_label)
 
                             if (end_time is not None and
@@ -267,6 +267,10 @@ async def download_subtitles(
 
                     media_sequence += 1
 
+                    # calculate next segment time, just in case it has
+                    # no #EXT-X-PROGRAM-DATE-TIME
+                    vttfile_start_time += timedelta(seconds=vttfile_duration)
+
                 elif kind == "endlist":
                     logger.debug("End marker in media manifest of "
                                  f"{subinfo['name']!r}. Stopping.")
@@ -278,7 +282,7 @@ async def download_subtitles(
                             f"Media manifest of {subinfo['name']!r} "
                             f"has unsupported version ({val})")
 
-                elif kind in ("byterange", "discontinuity", "map") or (
+                elif kind in ("byterange", "map") or (
                         kind == "key" and "METHOD=NONE" not in val
                 ):
                     # These tags are not implemented and change

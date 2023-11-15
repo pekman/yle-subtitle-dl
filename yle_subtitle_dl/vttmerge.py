@@ -9,8 +9,12 @@ logger = logging.getLogger("yle_subtitle_dl")
 
 
 class WebVTTMerge:
+    """
+    Merge WebVTT files with given start times.
 
-    MPEG2_TIMESTAMP_kHz = 90
+    Times in each input file are assumed to start at 00:00:00.
+    X-TIMESTAMP-MAP is ignored.
+    """
 
     first_line_re = re.compile(r"\AWEBVTT(?: |\t|\Z)")
 
@@ -23,15 +27,6 @@ class WebVTTMerge:
     """, re.VERBOSE | re.ASCII)
     _embedded_timestamp_re_str = r"(?:\d+:)?\d+:\d+(?:\.\d*)?"
 
-    x_timestamp_map_re = re.compile(fr"""
-        \A X-TIMESTAMP-MAP=
-        (?: (?: LOCAL: (?P<local> {_embedded_timestamp_re_str} )
-            |   MPEGTS: (?P<mpegts> \d+ )
-            |   [^,]*
-            ) (?: , | \n? \Z )
-        )*
-    """, re.VERBOSE | re.ASCII)
-
     cue_timings_re = re.compile(fr"""
         \A (?P<start> {_embedded_timestamp_re_str} )
         \s* --> \s*
@@ -40,11 +35,7 @@ class WebVTTMerge:
     """, re.VERBOSE | re.ASCII)
 
     def __init__(self, output_filename: str, start_time: datetime):
-        self.start_datetime = start_time
-
-        # MPEG2 timestamps in 90kHz MPEG2 time
-        self.start_mpegtime: Optional[int] = None
-        self.last_file_mpegtime = 0
+        self.start_time = start_time
 
         self.is_first_file = True
         self.last_line_was_empty = False
@@ -95,41 +86,16 @@ class WebVTTMerge:
                     int(m["min"]) + 60*(
                         int(m["hour"] or 0)))))
 
-    def _parse_x_timestamp_map(self, m: re.Match) -> int:
-        try:
-            if not all(m.group("local", "mpegts")):
-                raise ValueError()
-
-            localtime = self._parse_timestamp(m["local"])
-
-            # convert MPEG-2 presentation timestamp to milliseconds
-            mpegtime = int(m["mpegts"])
-            if mpegtime < self.last_file_mpegtime:
-                # handle 33-bit timestamp overflow
-                # (as required by RFC 8216)
-                mpegtime |= self.last_file_mpegtime & ~0x1_ffff_ffff
-            self.last_file_mpegtime = mpegtime
-
-        except ValueError:
-            self._warn("invalid X-TIMESTAMP-MAP; timing errors possible")
-            localtime = 0
-            mpegtime = 0
-
-        if self.start_mpegtime is None:
-            self.start_mpegtime = mpegtime
-
-        return (
-            (mpegtime - self.start_mpegtime) //
-            self.MPEG2_TIMESTAMP_kHz
-        ) - localtime
-
     def convert_and_write(
             self,
             file_contents: str,
-            file_start_datetime: datetime,
+            file_start_time: datetime,
             file_log_label: str,
     ) -> None:
         self.cur_file_log_label = file_log_label
+        file_localtime_offset = (
+            (file_start_time - self.start_time) //
+            timedelta(milliseconds=1))
 
         line_iter = iter(file_contents.splitlines(keepends=False))
 
@@ -145,29 +111,11 @@ class WebVTTMerge:
             self._writeln(line)
 
         # rest of header
-        file_localtime_offset: Optional[int] = None
         for line in line_iter:
             if line == "":
                 break
-
-            m = self.x_timestamp_map_re.match(line)
-            if m:
-                file_localtime_offset = self._parse_x_timestamp_map(m)
-
-                if self.is_first_file:
-                    # adjust timing so that subtitle cue timing
-                    # 00:00:00 is at self.start_datetime
-                    assert self.start_mpegtime is not None
-                    self.start_mpegtime -= (
-                        (self.start_datetime - file_start_datetime) //
-                        timedelta(milliseconds=1/self.MPEG2_TIMESTAMP_kHz)
-                    )
-            elif self.is_first_file:
+            if self.is_first_file and not line.startswith("X-TIMESTAMP-MAP="):
                 self._writeln(line)
-
-        if file_localtime_offset is None:
-            file_localtime_offset = 0
-            self._warn("X-TIMESTAMP-MAP missing; timing errors possible")
 
         # if needed, print empty line to separate items from the last
         # item of previous file
@@ -198,7 +146,7 @@ class WebVTTMerge:
                     pass
                 else:
                     if cue_end < 0:
-                        # skip subtitles before self.start_datetime
+                        # skip subtitles before self.start_time
                         for cue_line in line_iter:
                             if cue_line == "":
                                 break
@@ -206,8 +154,8 @@ class WebVTTMerge:
                         continue
                     if cue_start < 0:
                         # Subtitle is being displayed at
-                        # self.start_datetime. Set it to show right at
-                        # the start.
+                        # self.start_time. Set it to show right at the
+                        # start.
                         cue_start = 0
 
                     # TODO: maybe also skip subtitles after given end time
