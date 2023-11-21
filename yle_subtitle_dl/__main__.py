@@ -37,10 +37,17 @@ def durationval(val: str) -> timedelta:
         \s* \Z
     """, val, re.VERBOSE | re.ASCII | re.IGNORECASE)
     if m:
-        return timedelta(
-            hours=int(m[1] or 0),
-            minutes=int(m[2] or 0),
-            seconds=float(m[3].replace(",", ".")))
+        if m[1] is None and m[2] is not None:
+            # hh:mm
+            return timedelta(
+                hours=int(m[2]),
+                minutes=int(m[3].replace(",", ".")))
+        else:
+            # hh:mm:ss or ss (no ":")
+            return timedelta(
+                hours=int(m[1] or 0),
+                minutes=int(m[2] or 0),
+                seconds=float(m[3].replace(",", ".")))
 
     part_re = re.compile(r"""
         \s*
@@ -95,9 +102,10 @@ def main():
             Time values can be given in human-readable form.
             For start and end time, see
             <https://dateparser.readthedocs.io/>.
-            Duration can be either of the form "[[hh:]mm:]ss" or
-            something like "1h 2m 3s" or "1 hour 2 minutes 3 seconds".
-            This works in Finnish, English, and Swedish.
+            Duration can be given in any of the following forms:
+            "hh:mm:ss[.sss]", "hh:mm", "ss[.sss]", or something like
+            "1h 2m 3s" or "1 hour 2 minutes 3 seconds". This works in
+            Finnish, English, and Swedish.
         """)
 
     time_group.add_argument(
