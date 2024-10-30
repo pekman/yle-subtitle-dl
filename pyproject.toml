@@ -18,3 +18,7 @@ dev = [
 
 [project.scripts]
 yle-subtitle-dl = "yle_subtitle_dl.__main__:main"
+
+[project.urls]
+Homepage = "https://github.com/pekman/yle-subtitle-dl"
+Source = "https://github.com/pekman/yle-subtitle-dl"
